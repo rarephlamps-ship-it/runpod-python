@@ -1,0 +1,21 @@
+name: Lauritz Public Toolchain Probe
+
+on:
+  push:
+    branches: [lauritz-toolchain-cache]
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Probe runner
+        run: |
+          mkdir -p /tmp/probe
+          printf 'PUBLIC_RUNNER_OK\n' > /tmp/probe/status.txt
+          java -version 2>&1 | tee /tmp/probe/java.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lauritz-public-runner-probe
+          path: /tmp/probe
