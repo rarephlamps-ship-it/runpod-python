@@ -3,6 +3,8 @@ name: Lauritz Public Toolchain Probe
 on:
   push:
     branches: [lauritz-toolchain-cache]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 jobs:
