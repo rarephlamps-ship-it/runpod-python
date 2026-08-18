@@ -1,4 +1,4 @@
-name: Lauritz Public Cache Splitter
+name: Lauritz Public Build Extras
 
 on:
   push:
@@ -7,54 +7,39 @@ on:
     branches: [main]
   workflow_dispatch:
 
-permissions:
-  actions: read
-  contents: read
-
 jobs:
-  split-cache:
+  extras:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-      - name: Download previously built dependency cache
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install AGP default Build Tools 35.0.0
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p /tmp/cache-download /tmp/cache-parts
-          gh run download 32138344733 -n lauritz-gradle-dependency-cache -D /tmp/cache-download
-          test -s /tmp/cache-download/lauritz-gradle-cache.tar.zst
-          echo 'd8278c45b8400d196f9b905d7828a1ad61e1a505db1573ff06558cb11347891d  /tmp/cache-download/lauritz-gradle-cache.tar.zst' | sha256sum -c -
-          split -b 200M -d -a 2 /tmp/cache-download/lauritz-gradle-cache.tar.zst /tmp/cache-parts/cache-part-
-          cp /tmp/cache-download/offline-sha256.txt /tmp/cache-parts/ 2>/dev/null || true
-          ls -lh /tmp/cache-parts
-      - name: Upload cache part 00
-        uses: actions/upload-artifact@v4
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager 'build-tools;35.0.0'
+          test -x "$ANDROID_HOME/build-tools/35.0.0/aapt2"
+      - name: Package build extras
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/extras/android-sdk/build-tools /tmp/extras/jdk17
+          cp -a "$ANDROID_HOME/build-tools/35.0.0" /tmp/extras/android-sdk/build-tools/
+          cp -a "$JAVA_HOME"/. /tmp/extras/jdk17/
+          tar -C /tmp/extras -I 'zstd -10 -T0' -cf /tmp/lauritz-build-extras.tar.zst .
+          sha256sum /tmp/lauritz-build-extras.tar.zst | tee /tmp/lauritz-build-extras.sha256
+          ls -lh /tmp/lauritz-build-extras.tar.zst
+      - uses: actions/upload-artifact@v4
         with:
-          name: lauritz-gradle-cache-part-00
-          path: /tmp/cache-parts/cache-part-00
+          name: lauritz-build-extras
+          path: |
+            /tmp/lauritz-build-extras.tar.zst
+            /tmp/lauritz-build-extras.sha256
           compression-level: 0
-          retention-days: 7
-      - name: Upload cache part 01
-        uses: actions/upload-artifact@v4
-        with:
-          name: lauritz-gradle-cache-part-01
-          path: /tmp/cache-parts/cache-part-01
-          compression-level: 0
-          retention-days: 7
-      - name: Upload cache part 02
-        uses: actions/upload-artifact@v4
-        with:
-          name: lauritz-gradle-cache-part-02
-          path: /tmp/cache-parts/cache-part-02
-          compression-level: 0
-          retention-days: 7
-      - name: Upload cache checksum
-        uses: actions/upload-artifact@v4
-        with:
-          name: lauritz-gradle-cache-checksum
-          path: /tmp/cache-parts/offline-sha256.txt
-          if-no-files-found: warn
           retention-days: 7
