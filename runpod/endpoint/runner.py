@@ -160,7 +160,7 @@ class Job:
             stream_partial = self._fetch_job(source="stream")
             if (
                 stream_partial["status"] not in FINAL_STATES
-                or len(stream_partial["stream"]) > 0
+                or len(stream_partial.get("stream", [])) > 0
             ):
                 for chunk in stream_partial.get("stream", []):
                     yield chunk["output"]
@@ -214,7 +214,7 @@ class Endpoint:
         Returns:
             A Job instance for the run request.
         """
-        if not request_input.get("input"):
+        if "input" not in request_input:
             request_input = {"input": request_input}
 
         job_request = self.rp_client.post(
@@ -233,7 +233,7 @@ class Endpoint:
             request_input: The input to pass into the endpoint.
             timeout: Maximum time to wait for the job to complete.
         """
-        if not request_input.get("input"):
+        if "input" not in request_input:
             request_input = {"input": request_input}
 
         job_request = self.rp_client.post(
