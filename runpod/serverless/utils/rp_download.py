@@ -118,40 +118,45 @@ def file(file_url: str) -> dict:
     """
     os.makedirs("job_files", exist_ok=True)
 
-    download_response = SyncClientSession().get(file_url, headers=HEADERS, timeout=30)
+    with SyncClientSession() as session:
+        download_response = session.get(file_url, headers=HEADERS, timeout=30)
+        try:
+            download_response.raise_for_status()
 
-    content_disposition = download_response.headers.get("Content-Disposition")
+            content_disposition = download_response.headers.get("Content-Disposition")
 
-    original_file_name = ""
-    if content_disposition:
-        params = extract_disposition_params(content_disposition)
+            original_file_name = ""
+            if content_disposition:
+                params = extract_disposition_params(content_disposition)
 
-        original_file_name = params.get("filename", "")
+                original_file_name = params.get("filename", "")
 
-    if not original_file_name:
-        download_path = urlparse(file_url).path
-        original_file_name = os.path.basename(download_path)
+            if not original_file_name:
+                download_path = urlparse(file_url).path
+                original_file_name = os.path.basename(download_path)
 
-    file_type = os.path.splitext(original_file_name)[1].replace(".", "")
+            file_type = os.path.splitext(original_file_name)[1].replace(".", "")
 
-    file_name = f"{uuid.uuid4()}"
+            file_name = f"{uuid.uuid4()}"
 
-    output_file_path = os.path.join("job_files", f"{file_name}.{file_type}")
-    with open(output_file_path, "wb") as output_file:
-        output_file.write(download_response.content)
+            output_file_path = os.path.join("job_files", f"{file_name}.{file_type}")
+            with open(output_file_path, "wb") as output_file:
+                output_file.write(download_response.content)
 
-    if file_type == "zip":
-        unzipped_directory = os.path.join("job_files", file_name)
-        os.makedirs(unzipped_directory, exist_ok=True)
-        with zipfile.ZipFile(output_file_path, "r") as zip_ref:
-            zip_ref.extractall(unzipped_directory)
-        unzipped_directory = os.path.abspath(unzipped_directory)
-    else:
-        unzipped_directory = None
+            if file_type == "zip":
+                unzipped_directory = os.path.join("job_files", file_name)
+                os.makedirs(unzipped_directory, exist_ok=True)
+                with zipfile.ZipFile(output_file_path, "r") as zip_ref:
+                    zip_ref.extractall(unzipped_directory)
+                unzipped_directory = os.path.abspath(unzipped_directory)
+            else:
+                unzipped_directory = None
 
-    return {
-        "file_path": os.path.abspath(output_file_path),
-        "type": file_type,
-        "original_name": original_file_name,
-        "extracted_path": unzipped_directory,
-    }
+            return {
+                "file_path": os.path.abspath(output_file_path),
+                "type": file_type,
+                "original_name": original_file_name,
+                "extracted_path": unzipped_directory,
+            }
+        finally:
+            download_response.close()

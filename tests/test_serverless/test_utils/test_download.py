@@ -95,10 +95,17 @@ class TestDownloadFilesFromUrls(unittest.TestCase):
 
         self.assertEqual(len(downloaded_files), len(urls))
 
-        for index, url in enumerate(urls):
-            # Check that the url was called with SyncClientSession.get
-            self.assertIn(url, mock_get.call_args_list[index][0])
+        # Worker scheduling is not a request-order contract. Require every URL
+        # exactly once, while keeping result-to-input checks below.
+        self.assertCountEqual(
+            [entry.args[0] for entry in mock_get.call_args_list], list(urls)
+        )
+        for entry in mock_get.call_args_list:
+            self.assertEqual(len(entry.args), 1)
+            self.assertTrue(entry.kwargs["stream"])
+            self.assertEqual(entry.kwargs["timeout"], 5)
 
+        for index, url in enumerate(urls):
             # Check that the file has the correct extension
             self.assertTrue(downloaded_files[index].endswith(".jpg"))
 
@@ -151,7 +158,7 @@ class FileDownloaderTestCase(unittest.TestCase):
 
     @patch("runpod.serverless.utils.rp_download.SyncClientSession.get")
     @patch("builtins.open", new_callable=mock_open)
-    def test_download_file(self, mock_file, mock_get):
+    def test_download_file_attachment_disposition(self, mock_file, mock_get):
         """
         Tests download_file
         """
@@ -175,7 +182,7 @@ class FileDownloaderTestCase(unittest.TestCase):
 
     @patch("runpod.serverless.utils.rp_download.SyncClientSession.get")
     @patch("builtins.open", new_callable=mock_open)
-    def test_download_file(self, mock_file, mock_get):
+    def test_download_file_inline_disposition(self, mock_file, mock_get):
         """
         Tests download_file using filename from Content-Disposition
         """

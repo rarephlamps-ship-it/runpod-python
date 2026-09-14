@@ -12,7 +12,24 @@ from runpod.endpoint import runner
 from runpod.endpoint.runner import Endpoint, Job, RunPodClient
 
 
-class TestRunPodClient(unittest.TestCase):
+class OfflineEndpointTestCase(unittest.TestCase):
+    """Restore global credentials and fail if a unit test reaches real transport."""
+
+    def setUp(self):
+        super().setUp()
+        state = patch.object(runpod, "api_key", None)
+        state.start()
+        self.addCleanup(state.stop)
+        transport = patch.object(
+            requests.Session,
+            "send",
+            side_effect=AssertionError("UNIT_TEST_NETWORK_FORBIDDEN"),
+        )
+        transport.start()
+        self.addCleanup(transport.stop)
+
+
+class TestRunPodClient(OfflineEndpointTestCase):
     """Tests for RunPodClient"""
 
     def test_no_api_key(self):
@@ -59,7 +76,7 @@ class TestRunPodClient(unittest.TestCase):
         self.assertEqual(client.api_key, custom_key)
     
 
-    @patch.object(requests.Session, "post")
+    @patch.object(requests.Session, "request")
     def test_post_with_401(self, mock_post):
         """
         Tests RunPodClient.post with 401 status code
@@ -72,6 +89,11 @@ class TestRunPodClient(unittest.TestCase):
             runpod.api_key = "MOCK_API_KEY"
             client = RunPodClient()
             client.post("ENDPOINT_ID/run", {"input": {}})
+        mock_post.assert_called_once_with(
+            "POST", f"{runpod.endpoint_url_base}/ENDPOINT_ID/run",
+            headers=client.headers, json={"input": {}}, timeout=10,
+        )
+        mock_response.raise_for_status.assert_not_called()
 
     @patch.object(requests.Session, "request")
     def test_post(self, mock_post):
@@ -89,7 +111,7 @@ class TestRunPodClient(unittest.TestCase):
 
         self.assertEqual(response, {"id": "123"})
 
-    @patch.object(requests.Session, "get")
+    @patch.object(requests.Session, "request")
     def test_get_with_401(self, mock_get):
         """
         Tests RunPodClient.get with 401 status code
@@ -102,6 +124,11 @@ class TestRunPodClient(unittest.TestCase):
             runpod.api_key = "MOCK_API_KEY"
             client = RunPodClient()
             client.get("ENDPOINT_ID/status/123")
+        mock_get.assert_called_once_with(
+            "GET", f"{runpod.endpoint_url_base}/ENDPOINT_ID/status/123",
+            headers=client.headers, json=None, timeout=10,
+        )
+        mock_response.raise_for_status.assert_not_called()
 
     @patch.object(requests.Session, "request")
     def test_get(self, mock_get):
@@ -120,7 +147,7 @@ class TestRunPodClient(unittest.TestCase):
         self.assertEqual(response, {"status": "COMPLETED"})
 
 
-class TestEndpoint(unittest.TestCase):
+class TestEndpoint(OfflineEndpointTestCase):
     """Tests for Endpoint"""
 
     ENDPOINT_ID = "ENDPOINT_ID"
@@ -130,6 +157,7 @@ class TestEndpoint(unittest.TestCase):
 
     def setUp(self):
         """Common setup for the tests."""
+        super().setUp()
         runpod.api_key = self.MOCK_API_KEY
         self.endpoint = Endpoint(self.ENDPOINT_ID)
     
@@ -207,13 +235,13 @@ class TestEndpoint(unittest.TestCase):
 
     def test_missing_api_key(self):
         """
-        Tests Endpoint.run without api_key
+        Tests construction without an explicit or global API key
         """
         with self.assertRaises(RuntimeError):
             runpod.api_key = None
-            self.endpoint.run(self.MODEL_INPUT)
+            Endpoint(self.ENDPOINT_ID).run(self.MODEL_INPUT)
 
-    @patch.object(requests.Session, "post")
+    @patch.object(requests.Session, "request")
     def test_run_with_401(self, mock_post):
         """
         Tests Endpoint.run with 401 status code
@@ -227,6 +255,12 @@ class TestEndpoint(unittest.TestCase):
 
         with self.assertRaises(RuntimeError):
             endpoint.run(request_data)
+        mock_post.assert_called_once_with(
+            "POST", f"{runpod.endpoint_url_base}/ENDPOINT_ID/run",
+            headers=endpoint.rp_client.headers,
+            json={"input": request_data}, timeout=10,
+        )
+        mock_response.raise_for_status.assert_not_called()
 
     @patch.object(runpod.endpoint.runner.RunPodClient, "_request")
     def test_run(self, mock_client_request):
