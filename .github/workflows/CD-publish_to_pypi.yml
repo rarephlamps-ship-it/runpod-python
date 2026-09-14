@@ -23,6 +23,7 @@ permissions:
 
 jobs:
   release-please:
+    if: ${{ github.repository == 'runpod/runpod-python' }}
     runs-on: ubuntu-latest
     outputs:
       release_created: ${{ steps.release.outputs.release_created }}
@@ -39,7 +40,7 @@ jobs:
   pypi-publish:
     name: PyPI Publish
     needs: release-please
-    if: ${{ needs.release-please.outputs.release_created || (github.event_name == 'workflow_dispatch' && inputs.force_publish == 'true') }}
+    if: ${{ github.repository == 'runpod/runpod-python' && (needs.release-please.outputs.release_created == 'true' || (github.event_name == 'workflow_dispatch' && inputs.force_publish == 'true')) }}
     runs-on: ubuntu-latest
 
     environment:
@@ -77,7 +78,7 @@ jobs:
   notify-runpod-workers:
     name: Notify workers
     needs: [release-please, pypi-publish]
-    if: ${{ needs.release-please.outputs.release_created || (github.event_name == 'workflow_dispatch' && inputs.force_publish == 'true') }}
+    if: ${{ github.repository == 'runpod/runpod-python' && (needs.release-please.outputs.release_created == 'true' || (github.event_name == 'workflow_dispatch' && inputs.force_publish == 'true')) }}
     strategy:
       matrix:
         repo:
