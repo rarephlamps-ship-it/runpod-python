@@ -1,0 +1,45 @@
+name: Lauritz Public Build Extras
+
+on:
+  push:
+    branches: [lauritz-toolchain-cache]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  extras:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install AGP default Build Tools 35.0.0
+        shell: bash
+        run: |
+          set -euo pipefail
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager 'build-tools;35.0.0'
+          test -x "$ANDROID_HOME/build-tools/35.0.0/aapt2"
+      - name: Package build extras
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/extras/android-sdk/build-tools /tmp/extras/jdk17
+          cp -a "$ANDROID_HOME/build-tools/35.0.0" /tmp/extras/android-sdk/build-tools/
+          cp -a "$JAVA_HOME"/. /tmp/extras/jdk17/
+          tar -C /tmp/extras -I 'zstd -10 -T0' -cf /tmp/lauritz-build-extras.tar.zst .
+          sha256sum /tmp/lauritz-build-extras.tar.zst | tee /tmp/lauritz-build-extras.sha256
+          ls -lh /tmp/lauritz-build-extras.tar.zst
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lauritz-build-extras
+          path: |
+            /tmp/lauritz-build-extras.tar.zst
+            /tmp/lauritz-build-extras.sha256
+          compression-level: 0
+          retention-days: 7
